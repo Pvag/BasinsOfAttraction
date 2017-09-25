@@ -156,18 +156,11 @@ module mathUtil
 
     ! TODO REFACTOR this to writeRootsToFile()
     ! Write roots to roots.out
-    open(unit=1, file=analysisFiles%rootsFile, iostat=io, action="write")
-    do i = 1, gp%nRoots
-      write(1,"(X,I3,2(2X,F25.19))") i, real(gp%roots(i)), aimag(gp%roots(i))
-    end do
-    close(1)
-
-
+    call writeRoots()
     call minusSep()
-
     call printFinalInformations()
-
     call printRoots(gp%roots, gp%nRoots)
+
   end subroutine exploreGrid
 
   integer function rootNumber(root, gp, valid)
@@ -344,5 +337,14 @@ module mathUtil
     write(*,*) "Basins informations written to file: ", analysisFiles%basinsFile
     write(*,*) "Roots informations written to file: ", analysisFiles%rootsFile
   end subroutine printFinalInformations
+
+  subroutine writeRoots()
+    integer :: i, io
+    open(unit=1, file=analysisFiles%rootsFile, iostat=io, action="write")
+    do i = 1, gp%nRoots
+      write(1,"(X,I3,2(2X,F25.19))") i, real(gp%roots(i)), aimag(gp%roots(i))
+    end do
+    close(1)
+  end subroutine writeRoots
 
 end module mathUtil
