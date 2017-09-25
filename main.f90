@@ -67,7 +67,6 @@ program main
   use mathUtil
 
   ! variables definition
-  type(grid) :: gp
   character(len=*), parameter :: basinsFile = "./basins.out"
   character(len=*), parameter :: rootsFile = "./roots.out"
   character(len=*), parameter :: outputImageFile = "render.png/"
@@ -79,7 +78,7 @@ program main
   write(*,*) "This program finds basins and roots and stores them to different files."
   write(*,*) "Ok, let's crunch some numbers!"
   ! init the grid parameters
-  call initGridAndData(gp, basinsFile, rootsFile, outputImageFile)
+  call initGridAndData(basinsFile, rootsFile, outputImageFile)
   ! for each point in grid
   ! compute the attractor
   ! and store info in outFile

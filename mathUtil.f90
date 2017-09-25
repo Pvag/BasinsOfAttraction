@@ -10,12 +10,14 @@ module mathUtil
     logical :: gridCompleted
     double complex, dimension(15) :: roots
     integer :: nRoots
+    real :: tInspectGridStart, tInspectGridEnd
   end type grid
 
   type files
     character (len=300) :: basinsFile, rootsFile, outputImageFile
   end type files
 
+  type(grid) :: gp
   type(files) :: analysisFiles
   double precision :: rightX, rightY, leftX, leftY, deltaR
   character (len=1) :: gnuplotDrawYN, openOutputImageYN
@@ -27,8 +29,7 @@ module mathUtil
 
   contains
 
-  subroutine initGridAndData(gp, basinsFile, rootsFile, outputImageFile)
-    type(grid), intent(inout) :: gp
+  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile)
     character (len=*) :: basinsFile
     character (len=*) :: rootsFile, outputImageFile
     
@@ -128,16 +129,14 @@ module mathUtil
     end interface di
 
     type(grid), intent(inout) :: gp
-    ! character(len=*), intent(in) :: basinsFile, rootsFile ! D
     double complex :: z0, root
     integer :: iter = 0, rn, io, i
     logical :: valid
-    real :: tInspectGridStart, tInspectGridEnd
 
     open(unit=1, file=analysisFiles%basinsFile, iostat=io, action="write")
     call equalSep()
     write(*,*) "Grid inspection started."
-    call cpu_time(tInspectGridStart)
+    call cpu_time(gp%tInspectGridStart)
     ! first point (top left corner)
     z0 = complex( real(gp%bottomLeft), aimag(gp%topRight)  )
     do while (.not.gp%gridCompleted)
@@ -147,20 +146,27 @@ module mathUtil
       write(1,"(2F25.19,2(2X,I3))") real(z0), aimag(z0), rn, iter
       z0 = nextPoint(z0, gp)
     end do
-    call cpu_time(tInspectGridEnd)
+    call cpu_time(gp%tInspectGridEnd)
     close(1)
+
+    
+    ! TODO REFACTOR move the next lines to another subroutine
     call cleanRoots(gp%roots, gp%nRoots)
+
+
+    ! TODO REFACTOR this to writeRootsToFile()
     ! Write roots to roots.out
     open(unit=1, file=analysisFiles%rootsFile, iostat=io, action="write")
     do i = 1, gp%nRoots
       write(1,"(X,I3,2(2X,F25.19))") i, real(gp%roots(i)), aimag(gp%roots(i))
     end do
     close(1)
+
+
     call minusSep()
-    write(*,*) "Grid inspection completed."
-    write(*,*) "CPU time used to inspect the grid: ", tInspectGridEnd - tInspectGridStart, " s"
-    write(*,*) "Basins informations written to file: ", analysisFiles%basinsFile
-    write(*,*) "Roots informations written to file: ", analysisFiles%rootsFile
+
+    call printFinalInformations()
+
     call printRoots(gp%roots, gp%nRoots)
   end subroutine exploreGrid
 
@@ -331,5 +337,12 @@ module mathUtil
   subroutine openOutputImage()
     ! analysisFiles%outputImageFile
   end subroutine openOutputImage
+
+  subroutine printFinalInformations()
+    write(*,*) "Grid inspection completed."
+    write(*,*) "CPU time used to inspect the grid: ", gp%tInspectGridEnd - gp%tInspectGridStart, " s"
+    write(*,*) "Basins informations written to file: ", analysisFiles%basinsFile
+    write(*,*) "Roots informations written to file: ", analysisFiles%rootsFile
+  end subroutine printFinalInformations
 
 end module mathUtil
