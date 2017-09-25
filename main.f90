@@ -1,6 +1,6 @@
 ! Description
 ! ===========
-! This program computes the roots of the complex cubic equation z**3 = 1
+! This program computes the roots of (quite simple) complex equations
 ! (attractors) for a grid of points on the complex plane. The extents
 ! and accuracy of the grid are chosen by the user at run time.
 !
@@ -8,12 +8,17 @@
 ! from 1. The special identifier 0 is used to indicate "no convergence".
 !
 ! The coordinates of each initial point in the grid (z0), together with
-! the number of iterations needed to reach its attractor (iter)
-! and the attractor reached (bas) are stored in the basins.dat file,
+! the attractor reached (bas) 
+! and the number of iterations needed to reach its attractor (iter)
+! are stored in the basins.out file,
 ! for further analysis and plotting.
 !
-! The output file will contain these informations, in each row:
-! Re(z0) Im(z0) iter bas
+! The output file (basins.out) will contain these informations, in each row:
+! Re(z0) Im(z0) bas iter
+
+! Keys (symbols) in the code
+! ==========================
+! D : line to be deleted
  
 ! Programmers
 ! ===========
@@ -22,7 +27,8 @@
 
 ! Compilation
 ! ===========
-! gfortran mathUtil.f90 main.f90 -o basinsExplorer
+! OLD $> gfortran mathUtil.f90 main.f90 -o basinsExplorer
+! $> make
 
 ! Execution
 ! =========
@@ -49,6 +55,12 @@
 ! passes the mathematical function and its derivative to the
 ! part of the program that performs the computation, namely,
 ! exploreGrid. I didn't try it with other equations.
+!
+!       2 | 25/09/2017 | P. Vagnini | Refactoring.
+! Added a legend: comments ending with a D represent lines to
+! be deleted.
+!
+!       --> use "git log", from now, on
 
 program main
 
@@ -58,23 +70,26 @@ program main
   type(grid) :: gp
   character(len=*), parameter :: basinsFile = "./basins.out"
   character(len=*), parameter :: rootsFile = "./roots.out"
-  double complex :: next
+  character(len=*), parameter :: outputImageFile = "render.png/"
+
+  ! double complex :: next ! D
 
   write(*,*)
   call equalSep()
   write(*,*) "This program finds basins and roots and stores them to different files."
   write(*,*) "Ok, let's crunch some numbers!"
   ! init the grid parameters
-  call initGrid(gp)
+  call initGridAndData(gp, basinsFile, rootsFile, outputImageFile)
   ! for each point in grid
   ! compute the attractor
   ! and store info in outFile
   ! TODO Refactor this splitting in more functions
-  call exploreGrid(gp, f, df, basinsFile, rootsFile)
+  call exploreGrid(gp, f, df)
+  
+  call outputRenderInspection()
 
   ! ATTENTION: VERY COOL PART :)
-  ! Definition of the complex function and its derivative
-  ! Change these, to test with a different function!
+  ! Definition of the complex function!
   contains
     double complex function f(z) ! the function
       double complex, intent(in) :: z

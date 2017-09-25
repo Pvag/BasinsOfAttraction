@@ -12,7 +12,13 @@ module mathUtil
     integer :: nRoots
   end type grid
 
+  type files
+    character (len=300) :: basinsFile, rootsFile, outputImageFile
+  end type files
+
+  type(files) :: analysisFiles
   double precision :: rightX, rightY, leftX, leftY, deltaR
+  character (len=1) :: gnuplotDrawYN, openOutputImageYN
 
   character (len=*), parameter :: sc = "==========================="
   character (len=*), parameter :: ls = "---------------------------"
@@ -21,8 +27,10 @@ module mathUtil
 
   contains
 
-  subroutine initGrid(gp)
+  subroutine initGridAndData(gp, basinsFile, rootsFile, outputImageFile)
     type(grid), intent(inout) :: gp
+    character (len=*) :: basinsFile
+    character (len=*) :: rootsFile, outputImageFile
     
     call equalSep()
     write(*,*) "Initialization of the grid"
@@ -33,7 +41,10 @@ module mathUtil
     gp%topRight   = complex(rightX, rightY)
     gp%bottomLeft = complex(leftX, leftY)
     call echoLimits(gp)
-  end subroutine initGrid
+    analysisFiles%basinsFile = basinsFile
+    analysisFiles%rootsFile = rootsFile
+    analysisFiles%outputImageFile = outputImageFile
+  end subroutine initGridAndData
 
   ! TODO use the grid type
   subroutine askLimitsDeltaTol(gp)
@@ -99,7 +110,7 @@ module mathUtil
     end if
   end function nextPoint
 
-  subroutine exploreGrid(gp, f, df, basinsFile, rootsFile)
+  subroutine exploreGrid(gp, f, df)
     ! The interface is needed in order to be able
     ! to pass functions as arguments.
     ! These don't need to be changed when you change
@@ -117,13 +128,13 @@ module mathUtil
     end interface di
 
     type(grid), intent(inout) :: gp
-    character(len=*), intent(in) :: basinsFile, rootsFile
+    ! character(len=*), intent(in) :: basinsFile, rootsFile ! D
     double complex :: z0, root
     integer :: iter = 0, rn, io, i
     logical :: valid
     real :: tInspectGridStart, tInspectGridEnd
 
-    open(unit=1, file=basinsFile, iostat=io, action="write")
+    open(unit=1, file=analysisFiles%basinsFile, iostat=io, action="write")
     call equalSep()
     write(*,*) "Grid inspection started."
     call cpu_time(tInspectGridStart)
@@ -140,7 +151,7 @@ module mathUtil
     close(1)
     call cleanRoots(gp%roots, gp%nRoots)
     ! Write roots to roots.out
-    open(unit=1, file=rootsFile, iostat=io, action="write")
+    open(unit=1, file=analysisFiles%rootsFile, iostat=io, action="write")
     do i = 1, gp%nRoots
       write(1,"(X,I3,2(2X,F25.19))") i, real(gp%roots(i)), aimag(gp%roots(i))
     end do
@@ -148,7 +159,8 @@ module mathUtil
     call minusSep()
     write(*,*) "Grid inspection completed."
     write(*,*) "CPU time used to inspect the grid: ", tInspectGridEnd - tInspectGridStart, " s"
-    write(*,*) "Basins informations written to file: ", basinsFile
+    write(*,*) "Basins informations written to file: ", analysisFiles%basinsFile
+    write(*,*) "Roots informations written to file: ", analysisFiles%rootsFile
     call printRoots(gp%roots, gp%nRoots)
   end subroutine exploreGrid
 
@@ -292,4 +304,32 @@ module mathUtil
       converged = .true.
     end if
   end function converged
+
+  subroutine outputRenderInspection()
+  ! Ask the user if she wants to render the data
+  ! and then if she wants to display it.
+  ! If positive answers are given, the relative actions
+  ! are performed.
+
+    print *, "Do you want gnuplot to render the output file? (y/n)"
+    read(*,*) gnuplotDrawYN
+    if (gnuplotDrawYN .eq. 'y' .or. gnuplotDrawYN .eq. 'Y') then
+      call gnuplotDraw()
+    end if
+
+    read(*,*) openOutputImageYN
+    if (openOutputImageYN .eq. 'y' .or. openOutputImageYN .eq. 'Y') then
+      call openOutputImage()
+    end if
+
+  end subroutine outputRenderInspection
+
+  subroutine gnuplotDraw()
+    ! analysisFiles%basinsFile
+  end subroutine gnuplotDraw
+
+  subroutine openOutputImage()
+    ! analysisFiles%outputImageFile
+  end subroutine openOutputImage
+
 end module mathUtil
