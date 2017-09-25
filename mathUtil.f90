@@ -8,10 +8,24 @@ module mathUtil
     double complex :: bottomLeft
     double precision :: delta, tol
     logical :: gridCompleted
-    double complex, dimension(15) :: roots
+    double complex, dimension(15) :: roots ! TODO NO hard-coded !
     integer :: nRoots
     real :: tInspectGridStart, tInspectGridEnd
+    procedure(ff), pointer, nopass :: f => null()
+    procedure(dff), pointer, nopass :: df => null()
   end type grid
+
+  abstract interface
+    double complex function ff(z)
+      double complex, intent(in) :: z
+    end function ff
+  end interface
+
+  abstract interface
+    double complex function dff(z)
+      double complex, intent(in) :: z
+    end function dff
+  end interface
 
   type files
     character (len=300) :: basinsFile, rootsFile, outputImageFile
@@ -29,28 +43,47 @@ module mathUtil
 
   contains
 
-  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile)
+  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile, f, df)
+    ! TODO check if these interfaces are still needed
+    ! The interface is needed in order to be able
+    ! to pass functions as arguments.
+    ! These don't need to be changed when you change
+    ! the complex function (and derivative) in main.f90
+    interface fi
+      double complex function f(z)
+        double complex, intent(in) :: z
+      end function f
+    end interface fi
+
+    interface di 
+      double complex function df(z)
+        double complex, intent(in) :: z
+      end function df
+    end interface di
+
     character (len=*) :: basinsFile
     character (len=*) :: rootsFile, outputImageFile
-    
+
+    ! TODO Check the next 2 lines !
+    gp%f => f
+    gp%df => df
+
     call equalSep()
     write(*,*) "Initialization of the grid"
     gp%gridCompleted = .false.
     gp%roots = 0.d0
-    call askLimitsDeltaTol(gp)
+    call askLimitsDeltaTol()
     ! TODO insert a while loop, to iterate until the user is satisfied with input
     gp%topRight   = complex(rightX, rightY)
     gp%bottomLeft = complex(leftX, leftY)
-    call echoLimits(gp)
+    call echoLimits()
     analysisFiles%basinsFile = basinsFile
     analysisFiles%rootsFile = rootsFile
     analysisFiles%outputImageFile = outputImageFile
   end subroutine initGridAndData
 
   ! TODO use the grid type
-  subroutine askLimitsDeltaTol(gp)
-    type(grid), intent(inout) :: gp
-
+  subroutine askLimitsDeltaTol()
     call minusSep()
     write(*,*) "Insert the value of top right x:"
     read(*,*) rightX
@@ -66,9 +99,7 @@ module mathUtil
     read(*,*) gp%tol
   end subroutine askLimitsDeltaTol
 
-  subroutine echoLimits(gp)
-    type(grid), intent(inout) :: gp
-
+  subroutine echoLimits()
     call equalSep()
     write(*,*) "You have set these parameters:"
     call minusSep()
@@ -111,24 +142,7 @@ module mathUtil
     end if
   end function nextPoint
 
-  subroutine exploreGrid(gp, f, df)
-    ! The interface is needed in order to be able
-    ! to pass functions as arguments.
-    ! These don't need to be changed when you change
-    ! the complex function (and derivative) in main.f90
-    interface fi
-      double complex function f(z)
-        double complex, intent(in) :: z
-      end function f
-    end interface fi
-
-    interface di 
-      double complex function df(z)
-        double complex, intent(in) :: z
-      end function df
-    end interface di
-
-    type(grid), intent(inout) :: gp
+  subroutine exploreGrid()
     double complex :: z0, root
     integer :: iter = 0, rn, io, i
     logical :: valid
@@ -140,7 +154,7 @@ module mathUtil
     ! first point (top left corner)
     z0 = complex( real(gp%bottomLeft), aimag(gp%topRight)  )
     do while (.not.gp%gridCompleted)
-      call findRoot(z0, f, df, iter, root, gp%tol, valid)
+      call findRoot(z0, iter, root, gp%tol, valid)
       rn = rootNumber(root, gp, valid) ! rn : root number
       ! Write basins to basins.out
       write(1,"(2F25.19,2(2X,I3))") real(z0), aimag(z0), rn, iter
@@ -148,18 +162,6 @@ module mathUtil
     end do
     call cpu_time(gp%tInspectGridEnd)
     close(1)
-
-    
-    ! TODO REFACTOR move the next lines to another subroutine
-    call cleanRoots(gp%roots, gp%nRoots)
-
-
-    ! TODO REFACTOR this to writeRootsToFile()
-    ! Write roots to roots.out
-    call writeRoots()
-    call minusSep()
-    call printFinalInformations()
-    call printRoots(gp%roots, gp%nRoots)
 
   end subroutine exploreGrid
 
@@ -204,17 +206,15 @@ module mathUtil
     end if
   end function match
 
-  subroutine cleanRoots(roots, nRoots)
+  subroutine cleanRoots()
     ! Rounds to 0 everything below tol
-    double complex, dimension(*), intent(inout) :: roots
-    integer, intent(in) :: nRoots
     double complex :: temp
     double precision, parameter :: tol = 1.d-20
     double precision :: re, im
     integer :: i
 
-    do i = 1, nRoots
-      temp = roots(i)
+    do i = 1, gp%nRoots
+      temp = gp%roots(i)
       re = real(temp)
       im = aimag(temp)
       if (dabs(re) < tol) then
@@ -223,36 +223,22 @@ module mathUtil
       if (dabs(im) < tol) then
         im = 0.d0
       end if
-      roots(i) = complex(re, im)
+      gp%roots(i) = complex(re, im)
     end do
   end subroutine cleanRoots
 
-  subroutine printRoots(roots, nRoots)
-    double complex, dimension(*), intent(in) :: roots
-    integer, intent(in) :: nRoots
+  subroutine printRoots()
     integer :: i
 
     call equalSep()
     write(*,*) "Roots found: index, value"
     call minusSep()
-    do i = 1, nRoots
-      write(*,"(X,I2,2X,2F20.16)") i, roots(i)
+    do i = 1, gp%nRoots
+      write(*,"(X,I2,2X,2F20.16)") i, gp%roots(i)
     end do
   end subroutine printRoots
 
-  subroutine findRoot(z0, f, df, iter, root, tol, valid)
-    interface fi
-      double complex function f(z)
-        double complex, intent(in) :: z
-      end function f
-    end interface fi
-
-    interface di 
-      double complex function df(z)
-        double complex, intent(in) :: z
-      end function df
-    end interface di
-
+  subroutine findRoot(z0, iter, root, tol, valid)
     double complex, intent(in)  :: z0   ! starting point
     double complex, intent(out) :: root ! attractor
     integer, intent(out) :: iter ! number of iterations needed to reach convergence
@@ -269,11 +255,11 @@ module mathUtil
     dz = complex(1.d10, -1.d10) ! TODO find a better way to define this
     ! TODO rewrite this in a cleaner form
     do while( ( dabs(real(dz)) > tol .or. dabs(aimag(dz)) > tol )  .and.  valid )
-      denum = df(zOld)
+      denum = gp%df(zOld)
       ! Avoid division by 0 and exceeding maximum number of iterations
       if ( dabs(real(denum)) > zero .or. dabs(aimag(denum)) > zero &
           .and. iter < maxIter) then
-        z = zOld - f(zOld)/denum
+        z = zOld - gp%f(zOld)/denum
         dz = z - zOld
         zOld = z
         iter = iter + 1
@@ -316,6 +302,7 @@ module mathUtil
       call gnuplotDraw()
     end if
 
+    print *, "Do you want to open the rendere image? (y/n)"
     read(*,*) openOutputImageYN
     if (openOutputImageYN .eq. 'y' .or. openOutputImageYN .eq. 'Y') then
       call openOutputImage()
@@ -323,10 +310,12 @@ module mathUtil
 
   end subroutine outputRenderInspection
 
+  ! TODO implement
   subroutine gnuplotDraw()
     ! analysisFiles%basinsFile
   end subroutine gnuplotDraw
 
+  ! TODO implement
   subroutine openOutputImage()
     ! analysisFiles%outputImageFile
   end subroutine openOutputImage
@@ -346,5 +335,15 @@ module mathUtil
     end do
     close(1)
   end subroutine writeRoots
+
+  subroutine run()
+    call exploreGrid()
+    call cleanRoots()
+    call writeRoots()
+    call minusSep()
+    call printFinalInformations()
+    call printRoots()
+    call outputRenderInspection()
+  end subroutine run
 
 end module mathUtil

@@ -78,14 +78,11 @@ program main
   write(*,*) "This program finds basins and roots and stores them to different files."
   write(*,*) "Ok, let's crunch some numbers!"
   ! init the grid parameters
-  call initGridAndData(basinsFile, rootsFile, outputImageFile)
+  call initGridAndData(basinsFile, rootsFile, outputImageFile, f, df)
   ! for each point in grid
   ! compute the attractor
   ! and store info in outFile
-  ! TODO Refactor this splitting in more functions
-  call exploreGrid(gp, f, df)
-  
-  call outputRenderInspection()
+  call run()
 
   ! ATTENTION: VERY COOL PART :)
   ! Definition of the complex function!
