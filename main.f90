@@ -69,7 +69,8 @@ program main
   ! variables definition
   character(len=*), parameter :: basinsFile = "./basins.out"
   character(len=*), parameter :: rootsFile = "./roots.out"
-  character(len=*), parameter :: outputImageFile = "render.png/"
+  character(len=*), parameter :: outputImageFile = "./render.png"
+  character(len=*), parameter :: gnuplotScriptFile = "./gnuplotScript"
 
   ! double complex :: next ! D
 
@@ -78,7 +79,7 @@ program main
   write(*,*) "This program finds basins and roots and stores them to different files."
   write(*,*) "Ok, let's crunch some numbers!"
   ! init the grid parameters
-  call initGridAndData(basinsFile, rootsFile, outputImageFile, f, df)
+  call initGridAndData(basinsFile, rootsFile, outputImageFile, gnuplotScriptFile, f, df)
   ! for each point in grid
   ! compute the attractor
   ! and store info in outFile

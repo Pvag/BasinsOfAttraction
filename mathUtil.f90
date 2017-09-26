@@ -1,3 +1,9 @@
+! TODO create a directory and put inside it the gnuplot script file
+!      the basins.out file, the roots.out file and render.jpg .
+!      The directory name should express the inspected area, like
+!      'xM1yM2xm3ym4b500x600', meaning:
+!      xMax = 1, yMax = 2, xMin = -3, yMin = -4, basins of
+!         attractions, 500x600 pixels x pixels
 module mathUtil
   implicit none
 
@@ -28,7 +34,8 @@ module mathUtil
   end interface
 
   type files
-    character (len=300) :: basinsFile, rootsFile, outputImageFile
+    character (len=300) :: basinsFile, rootsFile, outputImageFile,&
+                           gnuplotScriptFile
   end type files
 
   type(grid) :: gp
@@ -43,7 +50,7 @@ module mathUtil
 
   contains
 
-  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile, f, df)
+  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile, gnuplotScriptFile, f, df)
     ! TODO check if these interfaces are still needed
     ! The interface is needed in order to be able
     ! to pass functions as arguments.
@@ -61,8 +68,8 @@ module mathUtil
       end function df
     end interface di
 
-    character (len=*) :: basinsFile
-    character (len=*) :: rootsFile, outputImageFile
+    character (len=*), intent(in) :: basinsFile
+    character (len=*), intent(in) :: rootsFile, outputImageFile, gnuplotScriptFile
 
     ! TODO Check the next 2 lines !
     gp%f => f
@@ -80,6 +87,7 @@ module mathUtil
     analysisFiles%basinsFile = basinsFile
     analysisFiles%rootsFile = rootsFile
     analysisFiles%outputImageFile = outputImageFile
+    analysisFiles%gnuplotScriptFile = gnuplotScriptFile
   end subroutine initGridAndData
 
   ! TODO use the grid type
@@ -278,7 +286,6 @@ module mathUtil
     root = z
   end subroutine findRoot
 
-  ! TODO fix undefined symbol error
   logical function converged(dz, tol)
     double complex, intent(in) :: dz
     double precision, intent(in) :: tol
@@ -296,28 +303,60 @@ module mathUtil
   ! If positive answers are given, the relative actions
   ! are performed.
 
+    print *,
+    call equalSep()
     print *, "Do you want gnuplot to render the output file? (y/n)"
     read(*,*) gnuplotDrawYN
     if (gnuplotDrawYN .eq. 'y' .or. gnuplotDrawYN .eq. 'Y') then
       call gnuplotDraw()
-    end if
-
-    print *, "Do you want to open the rendere image? (y/n)"
-    read(*,*) openOutputImageYN
-    if (openOutputImageYN .eq. 'y' .or. openOutputImageYN .eq. 'Y') then
-      call openOutputImage()
+      print *, "Do you want to open the rendered image? (y/n)"
+      read(*,*) openOutputImageYN
+      if (openOutputImageYN .eq. 'y' .or. openOutputImageYN .eq. 'Y') then
+        call openOutputImage()
+      end if
     end if
 
   end subroutine outputRenderInspection
 
-  ! TODO implement
   subroutine gnuplotDraw()
-    ! analysisFiles%basinsFile
+    integer :: hPixels, vPixels, io
+    character(len=1000) :: gnuplotInstructions
+    character(len=150) :: launchGnuplotBashLine
+    double precision :: xMin, xMax, yMin, yMax
+
+    xMin = real(gp%bottomLeft)
+    xMax = real(gp%topRight)
+    yMin = aimag(gp%bottomLeft)
+    yMax = aimag(gp%topRight)
+    ! write the gnuplot script file with proper window size
+    hPixels = int( ( xMax - xMin ) / gp%delta ) ! TODO round off !
+    vPixels = int( ( yMax - yMin ) / gp%delta )
+
+    ! Generate the script file
+    open(unit=1, file=trim(analysisFiles%gnuplotScriptFile), iostat=io, action="write")
+    write(1,*) "set term png transparent size ", hPixels, ",", vPixels 
+    write(1,*) "set output '", trim(analysisFiles%outputImageFile), "'"
+    write(1,*) "set lmargin ", xMin 
+    write(1,*) "set bmargin ", yMin
+    write(1,*) "set tmargin ", yMax
+    write(1,*) "set rmargin ", xMax
+    write(1,*) "unset border"
+    write(1,*) "unset xtics"
+    write(1,*) "unset ytics"
+    write(1,*) "rgb(r,g,b) = 50*int(r) + 5*int(g) + 100*int(b)"
+    write(1,*) "plot '", trim(analysisFiles%basinsFile), "' using 1:2:(rgb($4,$4,$4)) with dots lc rgb variable"
+    close(1)
+    ! launch gnuplot gnuplotScriptFile
+    write(launchGnuplotBashLine,*) "gnuplot ", trim(analysisFiles%gnuplotScriptFile)
+
+    call execute_command_line(trim(launchGnuplotBashLine))
   end subroutine gnuplotDraw
 
-  ! TODO implement
   subroutine openOutputImage()
-    ! analysisFiles%outputImageFile
+    ! 
+    character(len=300) :: openImageInOSXBashCommand
+    write(openImageInOSXBashCommand,*) "open ", trim(analysisFiles%outputImageFile)
+    call execute_command_line(trim(openImageInOSXBashCommand))
   end subroutine openOutputImage
 
   subroutine printFinalInformations()
@@ -337,7 +376,7 @@ module mathUtil
   end subroutine writeRoots
 
   subroutine run()
-    call exploreGrid()
+    call exploreGrid() ! actual computations of roots
     call cleanRoots()
     call writeRoots()
     call minusSep()
