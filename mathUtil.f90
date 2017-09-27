@@ -4,6 +4,18 @@
 !      'xM1yM2xm3ym4b500x600', meaning:
 !      xMax = 1, yMax = 2, xMin = -3, yMin = -4, basins of
 !         attractions, 500x600 pixels x pixels
+!      I don't know how to code details of the function yet - maybe
+!      I can use an external file.
+! TODO Ask the user if she wants to render the basins of attractions,
+!      or the iterations of N.R. .
+! TODO Implement an advancement indicator (completed %)
+! TODO Find a way to define / require a function easier.
+! TODO Parallelize (OpenMP, MPI, CUDA)
+! TODO Use graphic libraries
+!         Make the drawing dynamic ! Inspect zones on the go !
+! TODO Take the code that generates the gnuplot script file out
+!      of the gnuplotDraw function ! Generate the script file,
+!      anyways !
 module mathUtil
   implicit none
 
