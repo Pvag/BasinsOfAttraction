@@ -1,6 +1,6 @@
 SOURCES=main.f90 mathUtil.f90
 OBJECTS=main.o
-MODULES=mathUtil.o
+MODULES=mathUtil.o utils.o
 MAIN=main
 GNUPLOT_SCRIPT_FILE=gnuplotScript
 BASINS_FILE=basins.out

@@ -8,7 +8,6 @@
 !      I can use an external file.
 ! TODO Ask the user if she wants to render the basins of attractions,
 !      or the iterations of N.R. .
-! TODO Implement an advancement indicator (completed %)
 ! TODO Find a way to define / require a function easier.
 ! TODO Parallelize (OpenMP, MPI, CUDA)
 ! TODO Use graphic libraries
@@ -16,7 +15,18 @@
 ! TODO Take the code that generates the gnuplot script file out
 !      of the gnuplotDraw function ! Generate the script file,
 !      anyways !
+! TODO Refactor: avoid passing gp, since it is in the type(grid), now
+! TODO Major Refactor: create a module called gridData and put into
+!      it the definition of the grid type and the declaration of
+!      the grid structure gp. This avoid mutual inclusion (via use)
+!      of some modules. This will allow for better refactoring,
+!      like putting the code that creates the gnuplot script file
+!      inside a proper function, inside the utils module.
+!      Finally, make the proper changes and updates in the Makefile.
+
 module mathUtil
+  use utils
+
   implicit none
 
   ! type definitions and variable declarations
@@ -105,17 +115,18 @@ module mathUtil
   ! TODO use the grid type
   subroutine askLimitsDeltaTol()
     call minusSep()
-    write(*,*) "Insert the value of top right x:"
+    write(*,101,advance='no') "Insert the value of top right x:"
     read(*,*) rightX
-    write(*,*) "Insert the value of top right y:"
+    write(*,101,advance='no') "Insert the value of top right y:"
     read(*,*) rightY
-    write(*,*) "Insert the value of bottom left x:"
+    write(*,101,advance='no') "Insert the value of bottom left x:"
     read(*,*) leftX
-    write(*,*) "Insert the value of bottom left y:"
+    write(*,101,advance='no') "Insert the value of bottom left y:"
     read(*,*) leftY
-    write(*,*) "Insert the value for the delta between points of the grid (e.g. 1.d-2):"
+    write(*,101,advance='no') "Insert the value for the delta between points of the grid (e.g. 1.d-2):"
     read(*,*) gp%delta
-    write(*,*) "Insert the value for the tolerance for convergence (N.R., e.g. 1.d-10):"
+    write(*,101,advance='no') "Insert the value for the tolerance for convergence (N.R., e.g. 1.d-10):"
+    101 format(x,a,x,i2)
     read(*,*) gp%tol
   end subroutine askLimitsDeltaTol
 
@@ -164,13 +175,18 @@ module mathUtil
 
   subroutine exploreGrid()
     double complex :: z0, root
-    integer :: iter = 0, rn, io, i
+    integer :: iter = 0, rn, io, i, pointsInGrid, pointIdx
     logical :: valid
 
     open(unit=1, file=analysisFiles%basinsFile, iostat=io, action="write")
     call equalSep()
     write(*,*) "Grid inspection started."
     call cpu_time(gp%tInspectGridStart)
+
+    pointsInGrid = computePointsInGrid() ! TODO move this in init !
+                                         ! and the var in type grid !
+    pointIdx = 1
+
     ! first point (top left corner)
     z0 = complex( real(gp%bottomLeft), aimag(gp%topRight)  )
     do while (.not.gp%gridCompleted)
@@ -179,6 +195,8 @@ module mathUtil
       ! Write basins to basins.out
       write(1,"(2F25.19,2(2X,I3))") real(z0), aimag(z0), rn, iter
       z0 = nextPoint(z0, gp)
+      call progressionIndicator( int( pointIdx * 100 / pointsInGrid ) )
+      pointIdx = pointIdx + 1
     end do
     call cpu_time(gp%tInspectGridEnd)
     close(1)
@@ -341,10 +359,10 @@ module mathUtil
     yMin = aimag(gp%bottomLeft)
     yMax = aimag(gp%topRight)
     ! write the gnuplot script file with proper window size
-    hPixels = int( ( xMax - xMin ) / gp%delta ) ! TODO round off !
+    hPixels = int( ( xMax - xMin ) / gp%delta )
     vPixels = int( ( yMax - yMin ) / gp%delta )
 
-    ! Generate the script file
+    ! Generate the gnuplot script file
     open(unit=1, file=trim(analysisFiles%gnuplotScriptFile), iostat=io, action="write")
     write(1,*) "set term png transparent size ", hPixels, ",", vPixels 
     write(1,*) "set output '", trim(analysisFiles%outputImageFile), "'"
@@ -374,8 +392,8 @@ module mathUtil
   subroutine printFinalInformations()
     write(*,*) "Grid inspection completed."
     write(*,*) "CPU time used to inspect the grid: ", gp%tInspectGridEnd - gp%tInspectGridStart, " s"
-    write(*,*) "Basins informations written to file: ", analysisFiles%basinsFile
-    write(*,*) "Roots informations written to file: ", analysisFiles%rootsFile
+    write(*,*) "Basins informations written to file: ", trim(analysisFiles%basinsFile)
+    write(*,*) "Roots informations written to file: ", trim(analysisFiles%rootsFile)
   end subroutine printFinalInformations
 
   subroutine writeRoots()
@@ -386,6 +404,16 @@ module mathUtil
     end do
     close(1)
   end subroutine writeRoots
+
+  integer function computePointsInGrid()
+    integer :: pointsInGridH, pointsInGridV
+
+    pointsInGridH = int( ( real(gp%topRight) - real(gp%bottomLeft) ) / &
+                      gp%delta )
+    pointsInGridV = int( ( aimag(gp%topRight) - aimag(gp%bottomLeft) ) / &
+                      gp%delta )
+    computePointsInGrid = pointsInGridH * pointsInGridV
+  end function computePointsInGrid
 
   subroutine run()
     call exploreGrid() ! actual computations of roots
