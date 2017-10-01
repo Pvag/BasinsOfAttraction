@@ -38,10 +38,6 @@
 ! =============
 ! Sat. Dec. 12th 2015
 
-! TODO
-! ====
-! Notify the user about the % of calculations completed.
-
 ! Revision history
 ! ================
 ! rev. n. |    date    | programmer | description
@@ -64,25 +60,15 @@
 
 program main
 
+  use utils
   use mathUtil
 
-  ! variables definition
-  character(len=*), parameter :: basinsFile = "./basins.out"
-  character(len=*), parameter :: rootsFile = "./roots.out"
-  character(len=*), parameter :: outputImageFile = "./render.png"
-  character(len=*), parameter :: gnuplotScriptFile = "./gnuplotScript"
-
-  ! double complex :: next ! D
-
-  write(*,*)
-  call equalSep()
-  write(*,*) "This program finds basins and roots and stores them to different files."
-  write(*,*) "Ok, let's crunch some numbers!"
-  ! init the grid parameters
-  call initGridAndData(basinsFile, rootsFile, outputImageFile, gnuplotScriptFile, f, df)
+  ! init the grid parameters (you may want to change paths in dataFiles.f90)
+  call initGridAndData(f, df)
   ! for each point in grid
   ! compute the attractor
   ! and store info in outFile
+
   call run()
 
   ! ATTENTION: VERY COOL PART :)

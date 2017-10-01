@@ -8,71 +8,29 @@
 !      I can use an external file.
 ! TODO Ask the user if she wants to render the basins of attractions,
 !      or the iterations of N.R. .
-! TODO Find a way to define / require a function easier.
+! TODO Find an easier way to define / require a function.
 ! TODO Parallelize (OpenMP, MPI, CUDA)
 ! TODO Use graphic libraries
 !         Make the drawing dynamic ! Inspect zones on the go !
 ! TODO Take the code that generates the gnuplot script file out
 !      of the gnuplotDraw function ! Generate the script file,
 !      anyways !
-! TODO Refactor: avoid passing gp, since it is in the type(grid), now
-! TODO Major Refactor: create a module called gridData and put into
-!      it the definition of the grid type and the declaration of
-!      the grid structure gp. This avoid mutual inclusion (via use)
-!      of some modules. This will allow for better refactoring,
-!      like putting the code that creates the gnuplot script file
-!      inside a proper function, inside the utils module.
-!      Finally, make the proper changes and updates in the Makefile.
+! TODO Write the informations about the data
+!      inspected, the method used, and anything valuable
+!      that the user may appreciate/need to a text file.
 
 module mathUtil
   use utils
+  use mathData
+  use dataFiles
 
   implicit none
-
-  ! type definitions and variable declarations
-
-  type grid
-    double complex :: topRight
-    double complex :: bottomLeft
-    double precision :: delta, tol
-    logical :: gridCompleted
-    double complex, dimension(15) :: roots ! TODO NO hard-coded !
-    integer :: nRoots
-    real :: tInspectGridStart, tInspectGridEnd
-    procedure(ff), pointer, nopass :: f => null()
-    procedure(dff), pointer, nopass :: df => null()
-  end type grid
-
-  abstract interface
-    double complex function ff(z)
-      double complex, intent(in) :: z
-    end function ff
-  end interface
-
-  abstract interface
-    double complex function dff(z)
-      double complex, intent(in) :: z
-    end function dff
-  end interface
-
-  type files
-    character (len=300) :: basinsFile, rootsFile, outputImageFile,&
-                           gnuplotScriptFile
-  end type files
-
-  type(grid) :: gp
-  type(files) :: analysisFiles
-  double precision :: rightX, rightY, leftX, leftY, deltaR
-  character (len=1) :: gnuplotDrawYN, openOutputImageYN
-
-  character (len=*), parameter :: sc = "==========================="
-  character (len=*), parameter :: ls = "---------------------------"
 
   ! implementation of functions and procedure
 
   contains
 
-  subroutine initGridAndData(basinsFile, rootsFile, outputImageFile, gnuplotScriptFile, f, df)
+  subroutine initGridAndData(f, df)
     ! TODO check if these interfaces are still needed
     ! The interface is needed in order to be able
     ! to pass functions as arguments.
@@ -90,31 +48,35 @@ module mathUtil
       end function df
     end interface di
 
-    character (len=*), intent(in) :: basinsFile
-    character (len=*), intent(in) :: rootsFile, outputImageFile, gnuplotScriptFile
-
-    ! TODO Check the next 2 lines !
     gp%f => f
     gp%df => df
 
-    call equalSep()
+    call greetUser()
+
     write(*,*) "Initialization of the grid"
+    call equalSep()
     gp%gridCompleted = .false.
     gp%roots = 0.d0
-    call askLimitsDeltaTol()
     ! TODO insert a while loop, to iterate until the user is satisfied with input
-    gp%topRight   = complex(rightX, rightY)
-    gp%bottomLeft = complex(leftX, leftY)
-    call echoLimits()
-    analysisFiles%basinsFile = basinsFile
-    analysisFiles%rootsFile = rootsFile
-    analysisFiles%outputImageFile = outputImageFile
-    analysisFiles%gnuplotScriptFile = gnuplotScriptFile
+    call askAndEchoLimitsDeltaTol()
+
+    gp%pointsInGrid = computePointsInGrid()
   end subroutine initGridAndData
 
-  ! TODO use the grid type
+  subroutine askAndEchoLimitsDeltaTol()
+    logical :: proceed = .false.
+
+    do while (.not.proceed)
+      call askLimitsDeltaTol()
+      call echoLimitsDeltaTol()
+      proceed = answerIsYes("Do you want to proceed with the analysis ?")
+      call insertBlankLines()
+    end do
+  end subroutine askAndEchoLimitsDeltaTol
+
   subroutine askLimitsDeltaTol()
-    call minusSep()
+    double precision :: rightX, rightY, leftX, leftY, deltaR
+
     write(*,101,advance='no') "Insert the value of top right x:"
     read(*,*) rightX
     write(*,101,advance='no') "Insert the value of top right y:"
@@ -124,37 +86,32 @@ module mathUtil
     write(*,101,advance='no') "Insert the value of bottom left y:"
     read(*,*) leftY
     write(*,101,advance='no') "Insert the value for the delta between points of the grid (e.g. 1.d-2):"
+    gp%topRight   = complex(rightX, rightY)
+    gp%bottomLeft = complex(leftX, leftY)
     read(*,*) gp%delta
     write(*,101,advance='no') "Insert the value for the tolerance for convergence (N.R., e.g. 1.d-10):"
     101 format(x,a,x,i2)
     read(*,*) gp%tol
+    call insertBlankLines()
   end subroutine askLimitsDeltaTol
 
-  subroutine echoLimits()
-    call equalSep()
-    write(*,*) "You have set these parameters:"
-    call minusSep()
-    write(*,*) "Top right corner (x, y): ", gp%topRight
-    write(*,*) "Bottom left corner (x, y): ", gp%bottomLeft
-    write(*,*) "Delta between points of the grid (both x and y directions):", gp%delta
-    write(*,*) "Convergence (N.R.) considered reached at:", gp%tol
-  end subroutine echoLimits
+  subroutine echoLimitsDeltaTol()
+    write(*,*) "You have set these parameters for the analysis:"
+    write(*,100) " - Top-right corner   (x, y): ", gp%topRight
+    write(*,100) " - Bottom-left corner (x, y): ", gp%bottomLeft
+    write(*,101) " - Distance between points of the grid (both x and y directions):", gp%delta
+    write(*,101) " - Convergence (N.R.) considered reached at:", gp%tol
+    call insertBlankLines()
+    100 format(x,a,'(',f10.6,',',f10.6,')')
+    101 format(x,a,es11.4)
+  end subroutine echoLimitsDeltaTol
 
-  subroutine minusSep()
-    write(*,*) ls
-  end subroutine minusSep
-  
-  subroutine equalSep()
-    write(*,*) sc
-  end subroutine equalSep
-
-  double complex function nextPoint(p, gp)
+  double complex function nextPoint(p)
     ! Return next point, starting from top left,
     ! proceeding right, row by row, until the
     ! point at bottom right is reached.
     double complex, intent(in) :: p ! the actual point
     double precision :: oldRe, oldIm, newRe, newIm
-    type(grid) :: gp
     
     oldRe = real(p)
     oldIm = aimag(p)
@@ -175,27 +132,25 @@ module mathUtil
 
   subroutine exploreGrid()
     double complex :: z0, root
-    integer :: iter = 0, rn, io, i, pointsInGrid, pointIdx
+    integer :: iter = 0, rn, io, pointIdx
     logical :: valid
 
-    open(unit=1, file=analysisFiles%basinsFile, iostat=io, action="write")
-    call equalSep()
+    open(unit=1, file=basinsFile, iostat=io, action="write")
     write(*,*) "Grid inspection started."
-    call cpu_time(gp%tInspectGridStart)
+    call equalSep()
+    call cpu_time(gp%tInspectGridStart) ! TODO rename time vars
 
-    pointsInGrid = computePointsInGrid() ! TODO move this in init !
-                                         ! and the var in type grid !
     pointIdx = 1
 
     ! first point (top left corner)
     z0 = complex( real(gp%bottomLeft), aimag(gp%topRight)  )
     do while (.not.gp%gridCompleted)
-      call findRoot(z0, iter, root, gp%tol, valid)
+      call findRoot(z0, iter, root, valid)
       rn = rootNumber(root, gp, valid) ! rn : root number
       ! Write basins to basins.out
       write(1,"(2F25.19,2(2X,I3))") real(z0), aimag(z0), rn, iter
-      z0 = nextPoint(z0, gp)
-      call progressionIndicator( int( pointIdx * 100 / pointsInGrid ) )
+      z0 = nextPoint(z0)
+      call progressionIndicator( int( pointIdx * 100 / gp%pointsInGrid ) )
       pointIdx = pointIdx + 1
     end do
     call cpu_time(gp%tInspectGridEnd)
@@ -247,7 +202,7 @@ module mathUtil
   subroutine cleanRoots()
     ! Rounds to 0 everything below tol
     double complex :: temp
-    double precision, parameter :: tol = 1.d-20
+    double precision, parameter :: cleanTol = 1.d-20
     double precision :: re, im
     integer :: i
 
@@ -255,10 +210,10 @@ module mathUtil
       temp = gp%roots(i)
       re = real(temp)
       im = aimag(temp)
-      if (dabs(re) < tol) then
+      if (dabs(re) < cleanTol) then
         re = 0.d0
       end if
-      if (dabs(im) < tol) then
+      if (dabs(im) < cleanTol) then
         im = 0.d0
       end if
       gp%roots(i) = complex(re, im)
@@ -266,24 +221,22 @@ module mathUtil
   end subroutine cleanRoots
 
   subroutine printRoots()
+    ! Prints the computed roots on screen.
     integer :: i
 
+    write(*,*) "Roots found: index, (Re, Im)"
     call equalSep()
-    write(*,*) "Roots found: index, value"
-    call minusSep()
     do i = 1, gp%nRoots
-      write(*,"(X,I2,2X,2F20.16)") i, gp%roots(i)
+      write(*,"(X,I2,2X,'(',F12.6,', ',F12.6,')')") i, gp%roots(i)
     end do
   end subroutine printRoots
 
-  subroutine findRoot(z0, iter, root, tol, valid)
+  subroutine findRoot(z0, iter, root, valid)
     double complex, intent(in)  :: z0   ! starting point
     double complex, intent(out) :: root ! attractor
     integer, intent(out) :: iter ! number of iterations needed to reach convergence
     logical, intent(out) :: valid ! false if the root was not found
-    double precision, intent(in) :: tol
     double complex :: zOld, z, dz, denum
-    logical :: converged ! TODO check if I can avoid this using an interface in the module
     integer, parameter :: maxIter = 300 ! TODO ask this to the user?
     double precision, parameter :: zero = 0.d0
 
@@ -292,7 +245,7 @@ module mathUtil
     zOld = z0
     dz = complex(1.d10, -1.d10) ! TODO find a better way to define this
     ! TODO rewrite this in a cleaner form
-    do while( ( dabs(real(dz)) > tol .or. dabs(aimag(dz)) > tol )  .and.  valid )
+    do while( ( dabs(real(dz)) > gp%tol .or. dabs(aimag(dz)) > gp%tol )  .and.  valid )
       denum = gp%df(zOld)
       ! Avoid division by 0 and exceeding maximum number of iterations
       if ( dabs(real(denum)) > zero .or. dabs(aimag(denum)) > zero &
@@ -316,11 +269,10 @@ module mathUtil
     root = z
   end subroutine findRoot
 
-  logical function converged(dz, tol)
+  logical function converged(dz)
     double complex, intent(in) :: dz
-    double precision, intent(in) :: tol
     
-    if ( abs(real(dz)) > tol .and. abs(aimag(dz)) > tol ) then
+    if ( abs(real(dz)) > gp%tol .and. abs(aimag(dz)) > gp%tol ) then
       converged = .false.
     else
       converged = .true.
@@ -333,15 +285,9 @@ module mathUtil
   ! If positive answers are given, the relative actions
   ! are performed.
 
-    print *,
-    call equalSep()
-    print *, "Do you want gnuplot to render the output file? (y/n)"
-    read(*,*) gnuplotDrawYN
-    if (gnuplotDrawYN .eq. 'y' .or. gnuplotDrawYN .eq. 'Y') then
+    if (answerIsYes("Do you want gnuplot to render the output file?")) then
       call gnuplotDraw()
-      print *, "Do you want to open the rendered image? (y/n)"
-      read(*,*) openOutputImageYN
-      if (openOutputImageYN .eq. 'y' .or. openOutputImageYN .eq. 'Y') then
+      if (answerIsYes("Do you want to open the rendered image?")) then
         call openOutputImage()
       end if
     end if
@@ -350,7 +296,6 @@ module mathUtil
 
   subroutine gnuplotDraw()
     integer :: hPixels, vPixels, io
-    character(len=1000) :: gnuplotInstructions
     character(len=150) :: launchGnuplotBashLine
     double precision :: xMin, xMax, yMin, yMax
 
@@ -363,9 +308,9 @@ module mathUtil
     vPixels = int( ( yMax - yMin ) / gp%delta )
 
     ! Generate the gnuplot script file
-    open(unit=1, file=trim(analysisFiles%gnuplotScriptFile), iostat=io, action="write")
+    open(unit=1, file=trim(gnuplotScriptFile), iostat=io, action="write")
     write(1,*) "set term png transparent size ", hPixels, ",", vPixels 
-    write(1,*) "set output '", trim(analysisFiles%outputImageFile), "'"
+    write(1,*) "set output '", trim(outputImageFile), "'"
     write(1,*) "set lmargin ", xMin 
     write(1,*) "set bmargin ", yMin
     write(1,*) "set tmargin ", yMax
@@ -374,10 +319,10 @@ module mathUtil
     write(1,*) "unset xtics"
     write(1,*) "unset ytics"
     write(1,*) "rgb(r,g,b) = 50*int(r) + 5*int(g) + 100*int(b)"
-    write(1,*) "plot '", trim(analysisFiles%basinsFile), "' using 1:2:(rgb($4,$4,$4)) with dots lc rgb variable"
+    write(1,*) "plot '", trim(basinsFile), "' using 1:2:(rgb($4,$4,$4)) with dots lc rgb variable"
     close(1)
     ! launch gnuplot gnuplotScriptFile
-    write(launchGnuplotBashLine,*) "gnuplot ", trim(analysisFiles%gnuplotScriptFile)
+    write(launchGnuplotBashLine,*) "gnuplot ", trim(gnuplotScriptFile)
 
     call execute_command_line(trim(launchGnuplotBashLine))
   end subroutine gnuplotDraw
@@ -385,20 +330,23 @@ module mathUtil
   subroutine openOutputImage()
     ! 
     character(len=300) :: openImageInOSXBashCommand
-    write(openImageInOSXBashCommand,*) "open ", trim(analysisFiles%outputImageFile)
+    write(openImageInOSXBashCommand,*) "open ", trim(outputImageFile)
     call execute_command_line(trim(openImageInOSXBashCommand))
   end subroutine openOutputImage
 
   subroutine printFinalInformations()
     write(*,*) "Grid inspection completed."
     write(*,*) "CPU time used to inspect the grid: ", gp%tInspectGridEnd - gp%tInspectGridStart, " s"
-    write(*,*) "Basins informations written to file: ", trim(analysisFiles%basinsFile)
-    write(*,*) "Roots informations written to file: ", trim(analysisFiles%rootsFile)
+    write(*,*) "Basins informations written to file: ", trim(basinsFile)
+    write(*,*) "Roots  informations written to file: ", trim(rootsFile)
+    call insertBlankLines()
   end subroutine printFinalInformations
 
   subroutine writeRoots()
+    ! Writes roots to file set in the rootsFile variable
+    ! (specified in dataFiles.f90)
     integer :: i, io
-    open(unit=1, file=analysisFiles%rootsFile, iostat=io, action="write")
+    open(unit=1, file=rootsFile, iostat=io, action="write")
     do i = 1, gp%nRoots
       write(1,"(X,I3,2(2X,F25.19))") i, real(gp%roots(i)), aimag(gp%roots(i))
     end do
@@ -415,11 +363,54 @@ module mathUtil
     computePointsInGrid = pointsInGridH * pointsInGridV
   end function computePointsInGrid
 
+  subroutine writeAnalysisInfoToFiles()
+    integer, parameter :: infoFileUnit = 1000
+
+    open(infoFileUnit, file=trim(reportFile), iostat=ioStatus, &
+         action="write")
+    call checkIoStatus(ioStatus)
+
+    VALID_OPEN: if (ioStatus .eq. NO_ERROR_STATUS) then
+      ! what and how to write
+      write(infoFileUnit, *) "Basins of Attraction Analysis"
+      call minusSep(infoFileUnit, 1)
+      call writeWindowExtentsTo(infoFileUnit)
+      call insertBlankLines(infoFileUnit)
+
+      write(infoFileUnit, 100) "Distance between points (both " &
+        // "x and y directions)", gp%delta
+      write(infoFileUnit, 100) "Tolerance for the N.R. method: ", &
+        gp%tol
+      call insertBlankLines(infoFileUnit)
+
+!      write(infoFileUnit, *) "Render type: ", gp%renderType
+      100 format(x,a,es12.5)
+    end if VALID_OPEN
+
+    close(infoFileUnit, iostat=ioStatus)
+    call checkIoStatus(ioStatus)
+
+    call writeRoots()
+  end subroutine writeAnalysisInfoToFiles
+
+  subroutine writeWindowExtentsTo(infoFileUnit)
+    ! Writes info to file
+    integer, intent(in) :: infoFileUnit
+
+    write(infoFileUnit,*) "Rectangular grid inspected:"
+    call minusSep(infoFileUnit)
+    write(infoFileUnit, 101, advance="no") "Top-right point in grid: "
+    call printPoint(gp%topRight, infoFileUnit)
+    write(infoFileUnit, 102, advance="no") "Bottom-left point in grid: "
+    call printPoint(gp%bottomLeft, infoFileUnit)
+    101 format(3x,a)
+    102 format(1x,a)
+  end subroutine writeWindowExtentsTo
+
   subroutine run()
     call exploreGrid() ! actual computations of roots
     call cleanRoots()
-    call writeRoots()
-    call minusSep()
+    call writeAnalysisInfoToFiles()
     call printFinalInformations()
     call printRoots()
     call outputRenderInspection()
