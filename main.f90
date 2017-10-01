@@ -64,24 +64,22 @@ program main
   use mathUtil
 
   ! init the grid parameters (you may want to change paths in dataFiles.f90)
-  call initGridAndData(f, df)
-  ! for each point in grid
-  ! compute the attractor
-  ! and store info in outFile
+  call setFunction(f, df)
 
   call run()
 
   ! ATTENTION: VERY COOL PART :)
   ! Definition of the complex function!
   contains
-    double complex function f(z) ! the function
-      double complex, intent(in) :: z
-      f = z**10 - 1.d0
-    end function f
 
-    double complex function df(z) ! the derivative of the function
-      double complex, intent(in) :: z
-      df = 10.d0*z**9
-    end function df
+  double complex function f(z) ! the function
+    double complex, intent(in) :: z
+    f = z**10 - 1.d0
+  end function f
+
+  double complex function df(z) ! the derivative of the function
+    double complex, intent(in) :: z
+    df = 10.d0*z**9
+  end function df
 
 end program main

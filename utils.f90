@@ -25,8 +25,8 @@ module utils
     integer, intent(in) :: infoFileUnit
     double complex, intent(in) :: point
 
-    write(infoFileUnit, 102) real(point), ", ", aimag(point)
-    102 format(f10.4,a,f10.4)
+    write(infoFileUnit, 102) "(", real(point), ", ", aimag(point), ")"
+    102 format(a,f10.4,a,f10.4,a)
   end subroutine printPoint
 
   subroutine checkIoStatus(ioStatus)
@@ -94,6 +94,7 @@ module utils
   end subroutine greetUser
 
   logical function answerIsYes(question)
+    ! Just end your question with a question mark, no space needed.
     character(len=*) :: question
     character(len=1) :: yn
     answerIsYes = .false.

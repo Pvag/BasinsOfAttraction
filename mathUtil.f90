@@ -25,32 +25,37 @@ module mathUtil
   use dataFiles
 
   implicit none
+  
+  logical :: alreadyRendered
 
   ! implementation of functions and procedure
 
   contains
 
-  subroutine initGridAndData(f, df)
+!  subroutine initGridAndData(f, df)
+  subroutine initGridAndData()
     ! TODO check if these interfaces are still needed
     ! The interface is needed in order to be able
     ! to pass functions as arguments.
     ! These don't need to be changed when you change
     ! the complex function (and derivative) in main.f90
-    interface fi
-      double complex function f(z)
-        double complex, intent(in) :: z
-      end function f
-    end interface fi
+!    interface fi
+!      double complex function f(z)
+!        double complex, intent(in) :: z
+!      end function f
+!    end interface fi
+!
+!    interface di 
+!      double complex function df(z)
+!        double complex, intent(in) :: z
+!      end function df
+!    end interface di
+!
+!    gp%f => f
+!    gp%df => df
 
-    interface di 
-      double complex function df(z)
-        double complex, intent(in) :: z
-      end function df
-    end interface di
-
-    gp%f => f
-    gp%df => df
-
+    alreadyRendered = .false.
+    
     call greetUser()
 
     write(*,*) "Initialization of the grid"
@@ -224,7 +229,7 @@ module mathUtil
     ! Prints the computed roots on screen.
     integer :: i
 
-    write(*,*) "Roots found: index, (Re, Im)"
+    write(*,*) "Roots found: Index, (Re, Im)"
     call equalSep()
     do i = 1, gp%nRoots
       write(*,"(X,I2,2X,'(',F12.6,', ',F12.6,')')") i, gp%roots(i)
@@ -286,13 +291,19 @@ module mathUtil
   ! are performed.
 
     if (answerIsYes("Do you want gnuplot to render the output file?")) then
-      call gnuplotDraw()
-      if (answerIsYes("Do you want to open the rendered image?")) then
-        call openOutputImage()
-      end if
+      call askRenderTypeAndPlot()
+      alreadyRendered = .true.
     end if
 
   end subroutine outputRenderInspection
+
+  subroutine askRenderTypeAndPlot()
+    call askRenderType()
+    call gnuplotDraw()
+    if (answerIsYes("Do you want to open the rendered image?")) then
+      call openOutputImage()
+    end if
+  end subroutine askRenderTypeAndPlot
 
   subroutine gnuplotDraw()
     integer :: hPixels, vPixels, io
@@ -310,7 +321,7 @@ module mathUtil
     ! Generate the gnuplot script file
     open(unit=1, file=trim(gnuplotScriptFile), iostat=io, action="write")
     write(1,*) "set term png transparent size ", hPixels, ",", vPixels 
-    write(1,*) "set output '", trim(outputImageFile), "'"
+    write(1,*) "set output '", trim(renderImageFile), "'"
     write(1,*) "set lmargin ", xMin 
     write(1,*) "set bmargin ", yMin
     write(1,*) "set tmargin ", yMax
@@ -319,7 +330,11 @@ module mathUtil
     write(1,*) "unset xtics"
     write(1,*) "unset ytics"
     write(1,*) "rgb(r,g,b) = 50*int(r) + 5*int(g) + 100*int(b)"
-    write(1,*) "plot '", trim(basinsFile), "' using 1:2:(rgb($4,$4,$4)) with dots lc rgb variable"
+    if (trim(gp%renderType) .eq. RENDER_NR) then
+      write(1,*) "plot '", trim(basinsFile), "' using 1:2:(rgb($4,$4,$4)) with dots lc rgb variable"
+    else if (trim(gp%renderType) .eq. RENDER_ROOTS) then
+      write(1,*) "plot '", trim(basinsFile), "' using 1:2:(rgb($3,$3,$3)) with dots lc rgb variable"
+    end if
     close(1)
     ! launch gnuplot gnuplotScriptFile
     write(launchGnuplotBashLine,*) "gnuplot ", trim(gnuplotScriptFile)
@@ -330,7 +345,7 @@ module mathUtil
   subroutine openOutputImage()
     ! 
     character(len=300) :: openImageInOSXBashCommand
-    write(openImageInOSXBashCommand,*) "open ", trim(outputImageFile)
+    write(openImageInOSXBashCommand,*) "open ", trim(renderImageFile)
     call execute_command_line(trim(openImageInOSXBashCommand))
   end subroutine openOutputImage
 
@@ -383,7 +398,7 @@ module mathUtil
         gp%tol
       call insertBlankLines(infoFileUnit)
 
-!      write(infoFileUnit, *) "Render type: ", gp%renderType
+      call writeRenderType(infoFileUnit)
       100 format(x,a,es12.5)
     end if VALID_OPEN
 
@@ -392,6 +407,17 @@ module mathUtil
 
     call writeRoots()
   end subroutine writeAnalysisInfoToFiles
+
+  subroutine writeRenderType(infoFileUnit)
+    integer, intent(in) :: infoFileUnit
+    write(infoFileUnit, 101, advance='no') "Render type: "
+    if (trim(gp%renderType) .eq. RENDER_NR) then
+      write(infoFileUnit, *) "N.R. basins."
+    else if (trim(gp%renderType) .eq. RENDER_ROOTS) then
+      write(infoFileUnit, *) "roots basins."
+    end if
+    101 format(x,a)
+  end subroutine writeRenderType
 
   subroutine writeWindowExtentsTo(infoFileUnit)
     ! Writes info to file
@@ -408,12 +434,51 @@ module mathUtil
   end subroutine writeWindowExtentsTo
 
   subroutine run()
-    call exploreGrid() ! actual computations of roots
-    call cleanRoots()
-    call writeAnalysisInfoToFiles()
-    call printFinalInformations()
-    call printRoots()
-    call outputRenderInspection()
+    logical :: programShouldTerminate = .false.
+    do while (.not.programShouldTerminate)
+      call initGridAndData()
+      call exploreGrid() ! actual computations of roots
+      call cleanRoots()
+      call printFinalInformations()
+      call printRoots()
+      call outputRenderInspection()
+      call writeAnalysisInfoToFiles()
+      if (alreadyRendered) call moreRenders()
+      if (.not.answerIsYes("Do you want to perform a new analysis ?")) then
+        programShouldTerminate = .true.
+        call quittingMessage()
+      end if
+      gp%run = gp%run + 1
+    end do
   end subroutine run
+
+  subroutine quittingMessage()
+    write(*, *) "Program is quitting."
+  end subroutine quittingMessage
+
+  subroutine moreRenders()
+    logical :: wantsMore = .false.
+    do while (answerIsYes("Do you want to perform more renders "&
+        //"of the same data set ?"))
+      call askRenderTypeAndPlot()
+    end do
+  end subroutine moreRenders
+
+  subroutine askRenderType()
+    integer :: ans
+    integer, parameter :: NR = 1, ROOTS = 2
+    character(len=2) :: runStr
+    write(*, *) "Which type of render would you like to perform ?"
+    write(*, 100, advance="no") "(", NR, " - N.R. basins ; ", ROOTS, " - roots basins) : "
+    read(*, *) ans
+    if (ans .eq. 1) then
+      gp%renderType = RENDER_NR
+    else if (ans .eq. 2) then
+      gp%renderType = RENDER_ROOTS
+    end if
+    write(runStr,'(i0.2)') gp%run
+    renderImageFile = trim(gp%renderType)//"_"//trim(runStr)//renderImageExtension
+    100 format(2x,a,i2,a,i2,a)
+  end subroutine askRenderType
 
 end module mathUtil
